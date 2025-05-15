@@ -1,465 +1,538 @@
-function insertDateHeaderAndCounts() {
-  const CONFIG = {
-    spreadsheetId: '1GXKS4kV-TWX2eJFX0dFArjeJEj0QlcbUHrm6iVq-oh8',
-    sheetName: "HIFS",
-    folderId: '1iSAW15y_KbgNMrfGhHLBYDxOzfY-BOCG'
-  };
+function updateSpreadsheetData() {
+  try {
+    const CONFIG = {
+      spreadsheetId: '1GXKS4kV-TWX2eJFX0dFArjeJEj0QlcbUHrm6iVq-oh8',
+      sheetName: "HIFS",
+      folderId: '1iSAW15y_KbgNMrfGhHLBYDxOzfY-BOCG'
+    };
 
-  const sheet = SpreadsheetApp.openById(CONFIG.spreadsheetId).getSheetByName(CONFIG.sheetName);
-  if (!sheet) {
-    Logger.log(`❌ Sheet '${CONFIG.sheetName}' not found.`);
-    return;
+    const sheet = SpreadsheetApp.openById(CONFIG.spreadsheetId).getSheetByName(CONFIG.sheetName);
+    if (!sheet) {
+      throw new Error(`Sheet '${CONFIG.sheetName}' not found.`);
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const currentYear = new Date().getFullYear().toString();
+    Logger.log(`📅 Current Year: ${currentYear}`);
+
+    const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
+    if (yearRowIndex === -1) {
+      throw new Error(`Year row '${currentYear}' not found in the sheet.`);
+    }
+
+    const headerText = getPreviousWeekDateRangeFormatted();
+    const headerColumnIndex = ensureDateHeader(sheet, data[yearRowIndex], yearRowIndex, headerText);
+    Logger.log(`📍 Target Row: ${yearRowIndex + 1}, Target Column: ${headerColumnIndex + 1}`);
+
+    updateHIFStartedCount(sheet, data, yearRowIndex, headerColumnIndex, CONFIG.folderId);
+    updateCumulativeCount(sheet, data, headerColumnIndex, CONFIG.folderId);
+    updateEligibleAssignments(sheet, data, headerColumnIndex, CONFIG.folderId);
+    updateYearlyIncreaseOrDecrease(sheet, data, headerColumnIndex);
+    updateNotAssignmentEligible(sheet, data, headerColumnIndex);
+
+
+    updateLLCApplicationsSubmitted(sheet, data, headerColumnIndex, CONFIG.folderId);
+    updateLLCInterestNoted(sheet, data, headerColumnIndex, CONFIG.folderId);
+
+  } catch (error) {
+    Logger.log(`❌ Error: ${error.message}`);
   }
-
-  const data = sheet.getDataRange().getValues();
-  const currentYear = new Date().getFullYear().toString();
-  Logger.log(`📅 Current Year: ${currentYear}`);
-
-  const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
-  if (yearRowIndex === -1) {
-    Logger.log(`❌ Year row '${currentYear}' not found in the sheet.`);
-    return;
-  }
-
-  const headerText = getPreviousWeekDateRangeFormatted();
-  const headerColumnIndex = ensureDateHeader(sheet, data[yearRowIndex], yearRowIndex, headerText);
-  Logger.log(`📍 Target Row: ${yearRowIndex + 1}, Target Column: ${headerColumnIndex + 1}`);
-
-  updateHIFStartedCount(sheet, data, yearRowIndex, headerColumnIndex, CONFIG.folderId);
-  updateCumulativeCount(sheet, data, headerColumnIndex, CONFIG.folderId);
-  updateEligibleAssignments(sheet, data, headerColumnIndex, CONFIG.folderId);
-  updateYearlyChange(sheet, data, headerColumnIndex);
-  updateNonEligibleAssignments(sheet, data, headerColumnIndex, CONFIG.folderId);
-  updateLLCInterestNoted(sheet, data, headerColumnIndex, CONFIG.folderId);
-  updateLLCApplicationsSubmitted(sheet, data, headerColumnIndex, CONFIG.folderId);
-
-
 }
 
 function getPreviousWeekDateRangeFormatted() {
-  const today = new Date();
-  const day = today.getDay();
-  const lastMonday = new Date(today);
-  lastMonday.setDate(today.getDate() - (day === 0 ? 6 : day - 1) - 7);
-  const lastSunday = new Date(lastMonday);
-  lastSunday.setDate(lastMonday.getDate() + 6);
-  return `${formatDate(lastMonday)} - ${formatDate(lastSunday)}`;
+  try {
+    const today = new Date();
+    const day = today.getDay();
+    const lastMonday = new Date(today);
+    lastMonday.setDate(today.getDate() - (day === 0 ? 6 : day - 1) - 7);
+    const lastSunday = new Date(lastMonday);
+    lastSunday.setDate(lastMonday.getDate() + 6);
+    return `${formatDate(lastMonday)} - ${formatDate(lastSunday)}`;
+  } catch (error) {
+    Logger.log(`❌ Error calculating date range: ${error.message}`);
+    throw error; // Rethrow to propagate the error
+  }
 }
 
 function formatDate(date) {
-  return Utilities.formatDate(date, Session.getScriptTimeZone(), "MM/dd/yyyy");
+  try {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "MM/dd/yyyy");
+  } catch (error) {
+    Logger.log(`❌ Error formatting date: ${error.message}`);
+    throw error; // Rethrow to propagate the error
+  }
 }
 
 function ensureDateHeader(sheet, yearRow, yearRowIndex, headerText) {
-  let colIndex = yearRow.indexOf(headerText);
-
-  if (colIndex === -1) {
-    colIndex = yearRow.findIndex((val, i) => i > 0 && val === "");
-    if (colIndex === -1) colIndex = yearRow.length;
-    sheet.getRange(yearRowIndex + 1, colIndex + 1).setValue(headerText);
-    Logger.log(`✅ Inserted date header: ${headerText}`);
-  } else {
-    Logger.log(`ℹ️ Date header already exists: ${headerText}`);
+  try {
+    let colIndex = yearRow.indexOf(headerText);
+    if (colIndex === -1) {
+      colIndex = yearRow.findIndex((val, i) => i > 0 && val === "");
+      if (colIndex === -1) colIndex = yearRow.length;
+      sheet.getRange(yearRowIndex + 1, colIndex + 1).setValue(headerText);
+      Logger.log(`✅ Inserted date header: ${headerText}`);
+    } else {
+      Logger.log(`ℹ️ Date header already exists: ${headerText}`);
+    }
+    return colIndex;
+  } catch (error) {
+    Logger.log(`❌ Error ensuring date header: ${error.message}`);
+    throw error; // Rethrow to propagate the error
   }
-
-  return colIndex;
 }
 
 function updateHIFStartedCount(sheet, data, yearRowIndex, colIndex, folderId) {
-  const targetRowIndex = yearRowIndex + 1;
-  const rowLabel = data[targetRowIndex]?.[0]?.toString().trim();
+  try {
+    const targetRowIndex = yearRowIndex + 1;
+    const rowLabel = data[targetRowIndex]?.[0]?.toString().trim();
 
-  if (rowLabel === "HIF Started (not signed or completed)") {
-    const count = getCSVStatusCount(folderId, ["HIF Started"]);
-    if (count !== null) {
-      sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(count);
-      Logger.log(`✅ Inserted HIF Started count: ${count}`);
+    if (rowLabel === "HIF Started (not signed or completed)") {
+      const count = getCSVStatusCount(folderId, ["HIF Started"]);
+      if (count !== null) {
+        sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(count);
+        Logger.log(`✅ Inserted HIF Started count: ${count}`);
+      } else {
+        Logger.log("❌ Could not retrieve HIF Started count.");
+      }
     } else {
-      Logger.log("❌ Could not retrieve HIF Started count.");
+      Logger.log("❌ 'HIF Started (not signed or completed)' row not found immediately after the year row.");
     }
-  } else {
-    Logger.log("❌ 'HIF Started (not signed or completed)' row not found immediately after the year row.");
+  } catch (error) {
+    Logger.log(`❌ Error updating HIF Started count: ${error.message}`);
   }
 }
 
 function updateCumulativeCount(sheet, data, colIndex, folderId) {
-  const currentYear = new Date().getFullYear().toString();
-  const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
-
-  if (yearRowIndex === -1) {
-    Logger.log(`❌ Year row '${currentYear}' not found.`);
-    return;
-  }
-
-  const rowLabel = "Cumulative total Completed*/Signed (no started)";
-  let targetRowIndex = -1;
-
-  for (let i = yearRowIndex + 1; i < Math.min(data.length, yearRowIndex + 20); i++) {
-    if (data[i][0]?.toString().trim() === rowLabel) {
-      targetRowIndex = i;
-      break;
+  try {
+    const currentYear = new Date().getFullYear().toString();
+    const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
+    
+    if (yearRowIndex === -1) {
+      Logger.log(`❌ Year row '${currentYear}' not found.`);
+      return;
     }
-  }
 
-  if (targetRowIndex !== -1) {
-    const cellValue = sheet.getRange(targetRowIndex + 1, colIndex + 1).getValue();
-    Logger.log(`🔍 Checking cell: Row ${targetRowIndex + 1}, Col ${colIndex + 1}, Current Value: ${cellValue}`);
+    const rowLabel = "Cumulative total Completed*/Signed (no started)";
+    let targetRowIndex = -1;
 
-    if (cellValue === "" || cellValue === null || cellValue.toString().trim() === "") {
-      const count = getCSVStatusCount(folderId, ["HIF Signed", "HIF Completed"]);
-      if (count !== null) {
-        sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(count);
-        Logger.log(`✅ Inserted cumulative count: ${count}`);
-      } else {
-        Logger.log("❌ Could not retrieve cumulative count.");
+    for (let i = yearRowIndex + 1; i < Math.min(data.length, yearRowIndex + 20); i++) {
+      if (data[i][0]?.toString().trim() === rowLabel) {
+        targetRowIndex = i;
+        break;
       }
-    } else {
-      Logger.log(`ℹ️ Cell already has value (${cellValue}); skipping update.`);
     }
 
-    updateCumulativeTotalWithStarted(sheet, data, colIndex, targetRowIndex, folderId);
-  } else {
-    Logger.log(`❌ '${rowLabel}' row not found under year ${currentYear}.`);
+    if (targetRowIndex !== -1) {
+      const cellValue = sheet.getRange(targetRowIndex + 1, colIndex + 1).getValue();
+      Logger.log(`🔍 Checking cell: Row ${targetRowIndex + 1}, Col ${colIndex + 1}, Current Value: ${cellValue}`);
+
+      if (cellValue === "" || cellValue === null || cellValue.toString().trim() === "") {
+        const count = getCSVStatusCount(folderId, ["HIF Signed", "HIF Completed"]);
+        if (count !== null) {
+          sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(count);
+          Logger.log(`✅ Inserted cumulative count: ${count}`);
+        } else {
+          Logger.log("❌ Could not retrieve cumulative count.");
+        }
+      } else {
+        Logger.log(`ℹ️ Cell already has value (${cellValue}); skipping update.`);
+      }
+
+      updateCumulativeTotalWithStarted(sheet, data, colIndex, targetRowIndex, folderId);
+    } else {
+      Logger.log(`❌ '${rowLabel}' row not found under year ${currentYear}.`);
+    }
+  } catch (error) {
+    Logger.log(`❌ Error updating cumulative count: ${error.message}`);
   }
 }
 
 function updateCumulativeTotalWithStarted(sheet, data, colIndex, cumulativeRowIndex, folderId) {
-  const currentYear = new Date().getFullYear().toString();
-  const rowLabel = 'Cumulative Total with "started" ones included';
-  let targetRowIndex = -1;
+  try {
+    const currentYear = new Date().getFullYear().toString();
+    const rowLabel = 'Cumulative Total with "started" ones included';
+    let targetRowIndex = -1;
 
-  for (let i = cumulativeRowIndex + 1; i < Math.min(data.length, cumulativeRowIndex + 20); i++) {
-    const label = data[i][0]?.toString().trim();
-    Logger.log(`🔎 Checking row ${i + 1}: '${label}'`);
-    if (label === rowLabel) {
-      targetRowIndex = i;
-      break;
-    }
-  }
-
-  if (targetRowIndex !== -1) {
-    const hifStartedVal = getCSVStatusCount(folderId, ["HIF Started"]);
-    const cumulativeVal = getCSVStatusCount(folderId, ["HIF Signed", "HIF Completed"]);
-
-    Logger.log(`🔍 From CSV — HIF Started: ${hifStartedVal}, Completed/Signed: ${cumulativeVal}`);
-    const total = hifStartedVal + cumulativeVal;
-
-    const existingVal = sheet.getRange(targetRowIndex + 1, colIndex + 1).getValue();
-    if (!existingVal || existingVal.toString().trim() === "") {
-      sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(total);
-      Logger.log(`✅ Set combined total (${rowLabel}): ${total}`);
-    } else {
-      Logger.log(`ℹ️ Cell already has value (${existingVal}); skipping update.`);
-    }
-  } else {
-    Logger.log(`❌ '${rowLabel}' row not found under year ${currentYear}.`);
-  }
-}
-
-function updateEligibleAssignments(sheet, data, colIndex, folderId) {
-  const currentYear = new Date().getFullYear().toString();
-  const rowLabel = "HIF Completed/Signed assignment eligible";
-  let targetRowIndex = -1;
-
-  const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
-  if (yearRowIndex === -1) {
-    Logger.log(`❌ Year row '${currentYear}' not found.`);
-    return;
-  }
-
-  for (let i = yearRowIndex + 1; i < Math.min(data.length, yearRowIndex + 20); i++) {
-    if (data[i][0]?.toString().trim() === rowLabel) {
-      targetRowIndex = i;
-      break;
-    }
-  }
-
-  if (targetRowIndex === -1) {
-    Logger.log(`❌ Row '${rowLabel}' not found.`);
-    return;
-  }
-
-  const count = getEligibleAssignmentCount(folderId);
-  if (count !== null) {
-    const cell = sheet.getRange(targetRowIndex + 1, colIndex + 1);
-    const existingVal = cell.getValue();
-    if (!existingVal || existingVal.toString().trim() === "") {
-      cell.setValue(count);
-      Logger.log(`✅ Set '${rowLabel}' count: ${count}`);
-    } else {
-      Logger.log(`ℹ️ Cell already has value (${existingVal}); skipping update.`);
-    }
-  } else {
-    Logger.log("❌ Could not retrieve eligible assignment count.");
-  }
-}
-
-function getCSVStatusCount(folderId, targetStatuses) {
-  const folder = DriveApp.getFolderById(folderId);
-  const files = folder.getFilesByType(MimeType.CSV);
-
-  if (!files.hasNext()) {
-    Logger.log('❌ No CSV files found in the folder.');
-    return null;
-  }
-
-  const file = files.next();
-  const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
-  const headers = csvData[0];
-  const statusColumnIndex = headers.findIndex(header => header.toLowerCase().includes("status"));
-
-  if (statusColumnIndex === -1) {
-    Logger.log('❌ Status column not found in CSV file.');
-    return null;
-  }
-
-  targetStatuses = targetStatuses.map(status => status.toLowerCase());
-
-  const filteredRows = csvData.slice(1).filter(row => {
-    const status = row[statusColumnIndex]?.trim().toLowerCase();
-    return targetStatuses.some(statusText => status === statusText);
-  });
-
-  Logger.log(`🔍 Filtered Rows Count: ${filteredRows.length}`);
-  return filteredRows.length;
-}
-
-function getEligibleAssignmentCount(folderId) {
-  const folder = DriveApp.getFolderById(folderId);
-  const files = folder.getFilesByType(MimeType.CSV);
-
-  if (!files.hasNext()) {
-    Logger.log('❌ No CSV files found in the folder.');
-    return null;
-  }
-
-  const file = files.next();
-  const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
-  const headers = csvData[0].map(h => h.trim().toLowerCase());
-
-  Logger.log(`📝 CSV Headers: ${headers.join(', ')}`);
-
-  const efPaidIndex = headers.findIndex(h => h === "ef paid");
-  const regIndex = headers.findIndex(h => h === "a&r registration date");
-  const signedIndex = headers.findIndex(h => h === "contract signed date");
-
-  Logger.log(`🔎 Found column indices - EF Paid: ${efPaidIndex}, Reg Date: ${regIndex}, Contract Signed: ${signedIndex}`);
-
-  if (efPaidIndex === -1 || regIndex === -1 || signedIndex === -1) {
-    Logger.log('❌ Required columns (EF Paid, Registration Date, Contract Signed Date) not found.');
-    return null;
-  }
-
-  const eligibleRows = csvData.slice(1).filter(row => {
-    return row[efPaidIndex]?.trim() && row[regIndex]?.trim() && row[signedIndex]?.trim();
-  });
-
-  Logger.log(`📊 Eligible assignment rows found: ${eligibleRows.length}`);
-  return eligibleRows.length;
-}
-
-function updateYearlyChange(sheet, data, colIndex) {
-  const currentYear = new Date().getFullYear();
-  const previousYear = currentYear - 1;
-  const labelTemplate = `Increase/decrease (${previousYear} to ${currentYear}, using grey total for both)`;
-
-  Logger.log(`🔎 Checking for the current year row: ${currentYear}`);
-
-  // Define custom date ranges for the current and previous year
-  const currentYearDateRange = { 
-    startDate: new Date('2025-04-28'),
-    endDate: new Date('2025-05-04')
-  };
-
-  const prevYearDateRange = { 
-    startDate: new Date('2024-05-06'),
-    endDate: new Date('2024-05-12')
-  };
-
-  // Locate the row for the current year
-  const currentYearIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear.toString());
-  if (currentYearIndex === -1) {
-    Logger.log(`❌ Could not find current year row: ${currentYear}`);
-    return;
-  }
-
-  Logger.log(`📅 Found current year row: ${currentYear} (row ${currentYearIndex + 1})`);
-
-  // Locate the rows for "Cumulative total Completed*/Signed (no started)" for both years
-  const cumulativeLabel = "Cumulative total Completed*/Signed (no started)";
-
-  Logger.log(`🔎 Searching for '${cumulativeLabel}' under the current year and previous year`);
-
-  // Function to find the target row for a given label under a given year
-  const findRowUnderYear = (startIndex, label) => {
-    for (let i = startIndex + 1; i < Math.min(data.length, startIndex + 20); i++) {
-      if (data[i][0]?.toString().trim() === label) {
-        return i;
+    for (let i = cumulativeRowIndex + 1; i < Math.min(data.length, cumulativeRowIndex + 20); i++) {
+      const label = data[i][0]?.toString().trim();
+      Logger.log(`🔎 Checking row ${i + 1}: '${label}'`);
+      if (label === rowLabel) {
+        targetRowIndex = i;
+        break;
       }
     }
-    return -1;
-  };
 
-  const currentCumulativeRow = findRowUnderYear(currentYearIndex, cumulativeLabel);
-  const prevYearIndex = data.findIndex(row => row[0]?.toString().trim() === previousYear.toString());
-  const prevCumulativeRow = findRowUnderYear(prevYearIndex, cumulativeLabel);
+    if (targetRowIndex !== -1) {
+      const hifStartedVal = getCSVStatusCount(folderId, ["HIF Started"]);
+      const cumulativeVal = getCSVStatusCount(folderId, ["HIF Signed", "HIF Completed"]);
 
-  if (currentCumulativeRow === -1 || prevCumulativeRow === -1) {
-    Logger.log(`❌ Could not find cumulative total row for one of the years: ${previousYear}, ${currentYear}`);
-    return;
-  }
+      Logger.log(`🔍 From CSV — HIF Started: ${hifStartedVal}, Completed/Signed: ${cumulativeVal}`);
+      const total = hifStartedVal + cumulativeVal;
 
-  Logger.log(`✅ Found required rows - current year cumulative: ${currentCumulativeRow + 1}, previous year cumulative: ${prevCumulativeRow + 1}`);
-
-  // Count the true values for the current year within the custom date range
-  const currentYearCount = getCountForDateRange(sheet, data, currentCumulativeRow, colIndex, currentYearDateRange);
-
-  // Count the true values for the previous year within the custom date range
-  const prevYearCount = getCountForDateRange(sheet, data, prevCumulativeRow, colIndex, prevYearDateRange);
-
-  // Calculate the change (difference between the two counts)
-  const change = currentYearCount - prevYearCount;
-
-  // Find the row where the yearly change should be inserted
-  const targetRow = data.findIndex(row => row[0]?.toString().trim() === labelTemplate);
-
-  if (targetRow !== -1) {
-    const targetCell = sheet.getRange(targetRow + 1, colIndex + 1);
-    const currentValue = targetCell.getValue();
-
-    if (!currentValue) {
-      targetCell.setValue(change);
-      Logger.log(`✅ Inserted yearly change (${currentYear} - ${previousYear}): ${change}`);
+      const existingVal = sheet.getRange(targetRowIndex + 1, colIndex + 1).getValue();
+      if (!existingVal || existingVal.toString().trim() === "") {
+        sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(total);
+        Logger.log(`✅ Set combined total (${rowLabel}): ${total}`);
+      } else {
+        Logger.log(`ℹ️ Cell already has value (${existingVal}); skipping update.`);
+      }
     } else {
-      Logger.log(`ℹ️ Yearly change already exists, skipping insertion.`);
+      Logger.log(`❌ '${rowLabel}' row not found under year ${currentYear}.`);
     }
-  } else {
-    Logger.log(`❌ Could not find label '${labelTemplate}' for yearly change.`);
+  } catch (error) {
+    Logger.log(`❌ Error updating cumulative total with started: ${error.message}`);
   }
 }
 
-// Helper function to count the true values for a specific date range
-function getCountForDateRange(sheet, data, rowIndex, colIndex, dateRange) {
-  let count = 0;
-  
-  // Loop through the data and find rows that fall within the date range
-  for (let i = rowIndex + 1; i < Math.min(data.length, rowIndex + 20); i++) {
-    const rowDate = new Date(data[i][0]);
-    const value = sheet.getRange(i + 1, colIndex + 1).getValue();
+// Add similar try-catch blocks to other functions like updateEligibleAssignments, updateNonEligibleAssignments, etc.
+
+function getCSVStatusCount(folderId, targetStatuses) {
+  try {
+    const folder = DriveApp.getFolderById(folderId);
+    const files = folder.getFilesByType(MimeType.CSV);
+
+    if (!files.hasNext()) {
+      Logger.log('❌ No CSV files found in the folder.');
+      return null;
+    }
+
+    const file = files.next();
+    const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
+    const headers = csvData[0];
+    const statusColumnIndex = headers.findIndex(header => header.toLowerCase().includes("status"));
+
+    if (statusColumnIndex === -1) {
+      Logger.log('❌ Status column not found in CSV file.');
+      return null;
+    }
+
+    targetStatuses = targetStatuses.map(status => status.toLowerCase());
+
+    const filteredRows = csvData.slice(1).filter(row => {
+      const status = row[statusColumnIndex]?.trim().toLowerCase();
+      return targetStatuses.some(statusText => status === statusText);
+    });
+
+    Logger.log(`🔍 Filtered Rows Count: ${filteredRows.length}`);
+    return filteredRows.length;
+  } catch (error) {
+    Logger.log(`❌ Error getting CSV status count: ${error.message}`);
+    return null; // Return null in case of error
+  }
+}
+function updateEligibleAssignments(sheet, data, colIndex, folderId) {
+  try {
+    const year = new Date().getFullYear().toString(); // Should be 2025
+    const rowLabel = 'HIF Completed/Signed assignment eligible';
     
-    // Check if the row date is within the date range and the value is true
-    if (rowDate >= dateRange.startDate && rowDate <= dateRange.endDate && value === true) {
-      count++;
+    const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === year);
+    if (yearRowIndex === -1) {
+      Logger.log(`❌ Year row '${year}' not found.`);
+      return;
     }
+
+    let targetRowIndex = -1;
+
+    // 🔍 Only look under the current year's section
+    for (let i = yearRowIndex + 1; i < data.length; i++) {
+      const currentLabel = data[i][0]?.toString().trim();
+      if (currentLabel === '') continue;
+      if (currentLabel === rowLabel) {
+        targetRowIndex = i;
+        break;
+      }
+      // Stop scanning if we hit another year
+      if (/^\d{4}$/.test(currentLabel)) break;
+    }
+
+    if (targetRowIndex === -1) {
+      Logger.log(`❌ '${rowLabel}' not found under year ${year}.`);
+      return;
+    }
+
+    Logger.log(`✅ Found '${rowLabel}' under ${year} at row ${targetRowIndex + 1}`);
+
+    // ✅ Get CSV
+    const folder = DriveApp.getFolderById(folderId);
+    const files = folder.getFilesByType(MimeType.CSV);
+    if (!files.hasNext()) {
+      Logger.log("❌ No CSV files found.");
+      return;
+    }
+
+    const file = files.next();
+    const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
+    const headers = csvData[0].map(h => h.trim().toLowerCase());
+
+    const efPaidIndex = headers.indexOf("ef paid");
+    const arRegIndex = headers.indexOf("a&r registration date");
+    const contractSignedIndex = headers.indexOf("contract signed date");
+
+    if (efPaidIndex === -1 || arRegIndex === -1 || contractSignedIndex === -1) {
+      Logger.log("❌ Missing required columns in CSV.");
+      return;
+    }
+
+    const filteredRows = csvData.slice(1).filter(row =>
+      row[efPaidIndex]?.trim() !== "" &&
+      row[arRegIndex]?.trim() !== "" &&
+      row[contractSignedIndex]?.trim() !== ""
+    );
+
+    const count = filteredRows.length;
+    const cell = sheet.getRange(targetRowIndex + 1, colIndex + 1);
+    const existingVal = cell.getValue();
+
+    Logger.log(`🧪 Existing value: ${existingVal}, New count: ${count}`);
+
+    if (!existingVal || parseInt(existingVal, 10) !== count) {
+      cell.setValue(count);
+      Logger.log(`✅ Set '${rowLabel}' to ${count}`);
+    } else {
+      Logger.log(`ℹ️ No update needed for '${rowLabel}'`);
+    }
+
+  } catch (error) {
+    Logger.log(`❌ Error updating eligible assignments: ${error.message}`);
   }
-  
-  return count;
 }
 
-function updateLLCInterestNoted(sheet, data, colIndex, folderId) {
-  const currentYear = new Date().getFullYear().toString();
-  const rowLabel = "LLC interest noted";
+function updateYearlyIncreaseOrDecrease(sheet, data, colIndex) {
+  try {
+    const currentYear = new Date().getFullYear();
+    const previousYear = currentYear - 1;
+    const rowLabel = 'Increase/decrease (2024 to 2025, using grey total for both)';
 
-  const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
-  if (yearRowIndex === -1) {
-    Logger.log(`❌ Year row '${currentYear}' not found.`);
-    return;
-  }
-
-  let targetRowIndex = -1;
-  for (let i = yearRowIndex + 1; i < Math.min(data.length, yearRowIndex + 20); i++) {
-    if (data[i][0]?.toString().trim() === rowLabel) {
-      targetRowIndex = i;
-      break;
+    // Find the target row
+    const targetRowIndex = data.findIndex(row => row[0]?.toString().trim() === rowLabel);
+    if (targetRowIndex === -1) {
+      Logger.log(`❌ Row for '${rowLabel}' not found.`);
+      return;
     }
-  }
 
-  if (targetRowIndex === -1) {
-    Logger.log(`❌ Row '${rowLabel}' not found.`);
-    return;
-  }
+    // Find cumulative row index for both years
+    const getCumulativeValue = (year) => {
+      const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === year.toString());
+      if (yearRowIndex === -1) {
+        Logger.log(`❌ Year row '${year}' not found.`);
+        return null;
+      }
 
-  const folder = DriveApp.getFolderById(folderId);
-  const files = folder.getFilesByType(MimeType.CSV);
+      for (let i = yearRowIndex + 1; i < Math.min(data.length, yearRowIndex + 20); i++) {
+        if (data[i][0]?.toString().trim() === "Cumulative total Completed*/Signed (no started)") {
+          const val = sheet.getRange(i + 1, colIndex + 1).getValue();
+          return parseInt(val, 10) || 0;
+        }
+      }
 
-  if (!files.hasNext()) {
-    Logger.log('❌ No CSV files found in the folder.');
-    return;
-  }
+      Logger.log(`❌ Cumulative total row not found under year ${year}.`);
+      return null;
+    };
 
-  const file = files.next();
-  const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
-  const headers = csvData[0].map(h => h.trim().toLowerCase());
+    const currentValue = getCumulativeValue(currentYear);
+    const previousValue = getCumulativeValue(previousYear);
 
-  const llcIndex = headers.findIndex(h => h === "llc interest");
-  if (llcIndex === -1) {
-    Logger.log(`❌ 'LLC Interest' column not found in CSV.`);
-    return;
-  }
+    if (currentValue === null || previousValue === null) {
+      Logger.log("❌ Could not retrieve cumulative values for both years.");
+      return;
+    }
 
-  const count = csvData.slice(1).filter(row => row[llcIndex]?.trim().toLowerCase() === "true").length;
-  Logger.log(`📊 LLC Interest TRUE count: ${count}`);
+    const difference = currentValue - previousValue;
 
-  const cell = sheet.getRange(targetRowIndex + 1, colIndex + 1);
-  const existingVal = cell.getValue();
-  if (!existingVal || existingVal.toString().trim() === "") {
-    cell.setValue(count);
-    Logger.log(`✅ Set '${rowLabel}' count: ${count}`);
-  } else {
-    Logger.log(`ℹ️ Cell already has value (${existingVal}); skipping update.`);
+    // Set the value in the target row
+    sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(difference);
+    Logger.log(`✅ Updated '${rowLabel}' with value: ${difference}`);
+  } catch (error) {
+    Logger.log(`❌ Error updating yearly increase/decrease: ${error.message}`);
   }
 }
-function updateLLCApplicationsSubmitted(sheet, data, colIndex, folderId) {
-  const currentYear = new Date().getFullYear().toString();
-  const rowLabel = "LLC Applications Submitted";
 
-  const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
-  if (yearRowIndex === -1) {
-    Logger.log(`❌ Year row '${currentYear}' not found.`);
-    return;
-  }
+function updateNotAssignmentEligible(sheet, data, colIndex) {
+  try {
+    const currentYear = new Date().getFullYear().toString();
 
-  let targetRowIndex = -1;
-  for (let i = yearRowIndex + 1; i < Math.min(data.length, yearRowIndex + 20); i++) {
-    if (data[i][0]?.toString().trim() === rowLabel) {
-      targetRowIndex = i;
-      break;
+    // Locate cumulative completed/signed row
+    const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
+    if (yearRowIndex === -1) {
+      Logger.log(`❌ Year row '${currentYear}' not found.`);
+      return;
     }
+
+    let cumulativeRowIndex = -1;
+    let eligibleRowIndex = -1;
+    let targetRowIndex = -1;
+
+    for (let i = yearRowIndex + 1; i < data.length; i++) {
+      const rowLabel = data[i][0]?.toString().trim();
+      if (rowLabel === "Cumulative total Completed*/Signed (no started)") cumulativeRowIndex = i;
+      if (rowLabel === "HIF Completed/Signed assignment eligible") eligibleRowIndex = i;
+      if (rowLabel === "HIF Completed/Signed NOT assignment eligible") targetRowIndex = i;
+      if (cumulativeRowIndex !== -1 && eligibleRowIndex !== -1 && targetRowIndex !== -1) break;
+    }
+
+    if (cumulativeRowIndex === -1 || eligibleRowIndex === -1 || targetRowIndex === -1) {
+      Logger.log(`❌ One or more required rows not found.`);
+      return;
+    }
+
+    const cumulativeVal = parseInt(sheet.getRange(cumulativeRowIndex + 1, colIndex + 1).getValue(), 10) || 0;
+    const eligibleVal = parseInt(sheet.getRange(eligibleRowIndex + 1, colIndex + 1).getValue(), 10) || 0;
+    const notEligibleVal = cumulativeVal - eligibleVal;
+
+    sheet.getRange(targetRowIndex + 1, colIndex + 1).setValue(notEligibleVal);
+    Logger.log(`✅ Set 'HIF Completed/Signed NOT assignment eligible' to: ${notEligibleVal}`);
+  } catch (error) {
+    Logger.log(`❌ Error updating 'HIF Completed/Signed NOT assignment eligible': ${error.message}`);
   }
+}
+function updateLLCApplicationsSubmitted(sheet, data, headerColumnIndex, folderId) {
+  try {
+    const currentYear = new Date().getFullYear().toString();
+    const rowLabel = "LLC Applications Submitted";
 
-  if (targetRowIndex === -1) {
-    Logger.log(`❌ Row '${rowLabel}' not found.`);
-    return;
+    // Find the year row and ensure it exists
+    const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
+    if (yearRowIndex === -1) {
+      Logger.log(`❌ Year row '${currentYear}' not found.`);
+      return;
+    }
+
+    let targetRowIndex = -1;
+
+    // Look for the row labeled "LLC Applications Submitted" under the current year section
+    for (let i = yearRowIndex + 1; i < data.length; i++) {
+      const currentLabel = data[i][0]?.toString().trim();
+      if (currentLabel === '') continue; // Skip empty rows
+      if (currentLabel === rowLabel) {
+        targetRowIndex = i;
+        break;
+      }
+      // Stop scanning if we hit another year
+      if (/^\d{4}$/.test(currentLabel)) break;
+    }
+
+    if (targetRowIndex === -1) {
+      Logger.log(`❌ '${rowLabel}' not found under year ${currentYear}.`);
+      return;
+    }
+
+    Logger.log(`✅ Found '${rowLabel}' under ${currentYear} at row ${targetRowIndex + 1}`);
+
+    // Retrieve CSV file from the folder
+    const folder = DriveApp.getFolderById(folderId);
+    const files = folder.getFilesByType(MimeType.CSV);
+
+    if (!files.hasNext()) {
+      Logger.log("❌ No CSV files found.");
+      return;
+    }
+
+    const file = files.next();
+    const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
+    const headers = csvData[0].map(h => h.trim().toLowerCase());
+
+    const llcApPulledIndex = headers.indexOf("llc ap pulled");
+
+    if (llcApPulledIndex === -1) {
+      Logger.log("❌ 'LLC Ap Pulled' column not found in CSV.");
+      return;
+    }
+
+    // Filter rows where "LLC Ap Pulled" is true
+    const filteredRows = csvData.slice(1).filter(row =>
+      row[llcApPulledIndex]?.trim().toLowerCase() === "true"
+    );
+
+    const count = filteredRows.length;
+    const cell = sheet.getRange(targetRowIndex + 1, headerColumnIndex + 1);
+    const existingVal = cell.getValue();
+
+    Logger.log(`🧪 Existing value: ${existingVal}, New count: ${count}`);
+
+    if (!existingVal || parseInt(existingVal, 10) !== count) {
+      cell.setValue(count);
+      Logger.log(`✅ Set '${rowLabel}' to ${count}`);
+    } else {
+      Logger.log(`ℹ️ No update needed for '${rowLabel}'`);
+    }
+
+  } catch (error) {
+    Logger.log(`❌ Error updating LLC Applications Submitted: ${error.message}`);
   }
+}
+function updateLLCInterestNoted(sheet, data, headerColumnIndex, folderId) {
+  try {
+    const currentYear = new Date().getFullYear().toString();
+    const rowLabel = "LLC interest noted";
 
-  const folder = DriveApp.getFolderById(folderId);
-  const files = folder.getFilesByType(MimeType.CSV);
+    // Find the year row and ensure it exists
+    const yearRowIndex = data.findIndex(row => row[0]?.toString().trim() === currentYear);
+    if (yearRowIndex === -1) {
+      Logger.log(`❌ Year row '${currentYear}' not found.`);
+      return;
+    }
 
-  if (!files.hasNext()) {
-    Logger.log('❌ No CSV files found in the folder.');
-    return;
-  }
+    let targetRowIndex = -1;
 
-  const file = files.next();
-  const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
-  const headers = csvData[0].map(h => h.trim().toLowerCase());
+    // Look for the row labeled "LLC Interest Noted" under the current year section
+    for (let i = yearRowIndex + 1; i < data.length; i++) {
+      const currentLabel = data[i][0]?.toString().trim();
+      if (currentLabel === '') continue; // Skip empty rows
+      if (currentLabel === rowLabel) {
+        targetRowIndex = i;
+        break;
+      }
+      // Stop scanning if we hit another year
+      if (/^\d{4}$/.test(currentLabel)) break;
+    }
 
-  const apPulledIndex = headers.findIndex(h => h === "llc ap pulled");
-  if (apPulledIndex === -1) {
-    Logger.log(`❌ 'LLC Ap Pulled' column not found in CSV.`);
-    return;
-  }
+    if (targetRowIndex === -1) {
+      Logger.log(`❌ '${rowLabel}' not found under year ${currentYear}.`);
+      return;
+    }
 
-  const count = csvData.slice(1).filter(row => row[apPulledIndex]?.trim().toLowerCase() === "true").length;
-  Logger.log(`📊 LLC Ap Pulled TRUE count: ${count}`);
+    Logger.log(`✅ Found '${rowLabel}' under ${currentYear} at row ${targetRowIndex + 1}`);
 
-  const cell = sheet.getRange(targetRowIndex + 1, colIndex + 1);
-  const existingVal = cell.getValue();
-  if (!existingVal || existingVal.toString().trim() === "") {
-    cell.setValue(count);
-    Logger.log(`✅ Set '${rowLabel}' count: ${count}`);
-  } else {
-    Logger.log(`ℹ️ Cell already has value (${existingVal}); skipping update.`);
+    // Retrieve CSV file from the folder
+    const folder = DriveApp.getFolderById(folderId);
+    const files = folder.getFilesByType(MimeType.CSV);
+
+    if (!files.hasNext()) {
+      Logger.log("❌ No CSV files found.");
+      return;
+    }
+
+    const file = files.next();
+    const csvData = Utilities.parseCsv(file.getBlob().getDataAsString());
+    const headers = csvData[0].map(h => h.trim().toLowerCase());
+
+    const llcInterestIndex = headers.indexOf("llc interest");
+
+    if (llcInterestIndex === -1) {
+      Logger.log("❌ 'LLC Interest' column not found in CSV.");
+      return;
+    }
+
+    // Filter rows where "LLC Interest" is true
+    const filteredRows = csvData.slice(1).filter(row =>
+      row[llcInterestIndex]?.trim().toLowerCase() === "true"
+    );
+
+    const count = filteredRows.length;
+    const cell = sheet.getRange(targetRowIndex + 1, headerColumnIndex + 1);
+    const existingVal = cell.getValue();
+
+    Logger.log(`🧪 Existing value: ${existingVal}, New count: ${count}`);
+
+    if (!existingVal || parseInt(existingVal, 10) !== count) {
+      cell.setValue(count);
+      Logger.log(`✅ Set '${rowLabel}' to ${count}`);
+    } else {
+      Logger.log(`ℹ️ No update needed for '${rowLabel}'`);
+    }
+
+  } catch (error) {
+    Logger.log(`❌ Error updating LLC Interest Noted: ${error.message}`);
   }
 }
 
